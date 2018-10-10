@@ -106,7 +106,7 @@ class Person:
             self.sur = choice([parent1.sur,parent2.sur])
         else:
             self.eq = gauss(100,20)
-            self.id = gauss(100,20)
+            self.iq = gauss(100,20)
             self.age = randint(minage, maxage)
             self.polal = randint(0,1000)
             self.sur = Country.get_name("Sur")
@@ -121,9 +121,30 @@ class Person:
             comp = Company(self)
             self.companies.append(comp)
             self.pay(comp,100)
+        for x in range(50):
+            person = choice(country.people)
+            if person != self:
+                print(person.id)
+                if person in self.attraction:
+                    if person in self.attraction:
+                        self.attraction[person.id] +=  self.compatability(person)
+                    else:
+                        self.attraction[person.id] = self.compatability(person)
+                    if self.attraction[person.id] > 1:
+                        if self.spouse == None:
+                            self.spouse = person
+                            print("marriage",self.name,"+",person.name)
+
 
         if self.age > self.lifeexp:
             self.die(country)
+    def compatability(self,other):
+        comp = 1
+        if self.sur == other.sur:
+            comp -= 0.1
+        comp -= (1-(max(self.eq,other.eq)/min(self.eq,other.eq)))
+        comp -= (1-(max(self.eq,other.eq)/min(self.eq,other.eq)))
+        return comp
     def pay(self,other,amount):
         if self.bank:
             self.bank.do_transaction(self,other,amount)
@@ -134,7 +155,6 @@ class Person:
             country.money += self.money
             self.money = 0
         country.people.remove(self)
-
 class Bank(Company):
     cut = 0.001
     intb = 0.01
@@ -150,7 +170,5 @@ class Bank(Company):
         rec.money += amount
     def year(self, country):
         pass
-#print(Country.get_name("Male"))
 Country()
-print()
 input("press enter key to exit")
