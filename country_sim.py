@@ -23,7 +23,8 @@ class Company():
     sector = None
     money = 0
     def __init__(self,owner):
-        sector = choice(Country.sectors)
+        self.sector = choice(Country.sectors)
+        self.name = owner.sur
     def pay(self,other,amount):
         self.money -= amount
         other.money += amount
@@ -40,6 +41,7 @@ class Country(Company):
     workers = []
     banks = []
     ownedcompanies = []
+    id = 0
     #vat: tax rate
     def __init__(self,hcount = 1000, money = 1000000,vat = 0.02):
         self.money = money
@@ -79,30 +81,47 @@ class Person:
     attra = 0
     polal = 500
     bank = None
-
-    def __init__(self,min = 15, max = 50, mmin = 0.5, mmax = 3, minage = 14,maxage = 99,lifeexp = 80,parent1 = None, parent2 = None):
+    position = []
+    def __init__(self, minage = 14,maxage = 99,lifeexp = 80,parent1 = None, parent2 = None):
         self.new = {}
-        gauss(lifeexp,20)
-        self.lifeexp = lifeexp
+
+        self.lifeexp = gauss(lifeexp,20)
         hasParents = (parent1 != None) and not parent2
         self.gender = rbool()
         self.children = []
+        self.companies = []
+        self.attraction = {}
+        self.oppinion = {}
+        Country.id += 1
+        self.id = Country.id
+
         if self.gender:
             self.name = Country.get_name("Male")
         else:
             self.name = Country.get_name("Female")
         if hasParents:
-            self.attra = parent1.attra()
+            self.eq = avg(parent1.eq,parent2.eq)
+            self.attra = avg(parent1.attra,parent2.polal)
             self.polal = avg(parent1.polal,parent2.polal)
             self.sur = choice([parent1.sur,parent2.sur])
         else:
+            self.eq = gauss(100,20)
+            self.id = gauss(100,20)
             self.age = randint(minage, maxage)
             self.polal = randint(0,1000)
             self.sur = Country.get_name("Sur")
+
+
     def year(self,country):
         self.age += 1
         if not self.pay(country,self.money * country.vat):
             self.bank = country.get_bank()
+        if random() < 1/(len(self.companies) + 0.1) and self.money > 100:
+            print("Company time",self.name,self.sur, self.money)
+            comp = Company(self)
+            self.companies.append(comp)
+            self.pay(comp,100)
+
         if self.age > self.lifeexp:
             self.die(country)
     def pay(self,other,amount):
