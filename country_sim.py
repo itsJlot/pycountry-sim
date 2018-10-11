@@ -18,6 +18,9 @@ def rbool():
 def avg(v,v2,rfact):
     val = (v + v2)/2
     val += rfact * val * (random() - 0.5)
+    return val
+
+
 class Company():
     workers = []
     sector = None
@@ -31,8 +34,11 @@ class Company():
     def year(self, country):
         self.pay(country,self.money * country.vat)
 
+
 class Sector():
     name = "Steel"
+
+
 class Country(Company):
     # Sector syntax: (Sector name, base mat, ratio of buyers (0 consumer, 1 companies), price of 1 unit)
     sectors = [("Raw",None,0.98,50),("Industry","Raw",0.7,2000),("Tech","Industry",0.4,3000),("Food","Raw",0.1,100)]
@@ -49,16 +55,18 @@ class Country(Company):
         self.vat = vat
         self.banks = [Bank()]
         for x in range(hcount):
-            p = Person()
+            p = Person(country=self)
             self.pay(p,500)
-            self.people.append(p)
+        year = 0
         while len(self.people) != 0:
+            year += 1
             self.cyear()
+            print("Year: " + str(year))
     def cyear(self):
         for company in self.companies[1:]:
             company.year(self)
 
-        print(self.people[0].name, self.people[0].money)
+        #print(self.people[0].name, self.people[0].attraction)
         self.people[0].year(self)
         for person in self.people[1:]:
             person.year(self)
@@ -82,9 +90,10 @@ class Person:
     polal = 500
     bank = None
     position = []
-    def __init__(self, minage = 14,maxage = 99,lifeexp = 80,parent1 = None, parent2 = None):
-        self.new = {}
 
+    def __init__(self, minage = 14,maxage = 99,lifeexp = 80,country = None,parent1 = None, parent2 = None):
+        self.new = {}
+        self.mstate = 100
         self.lifeexp = gauss(lifeexp,20)
         hasParents = (parent1 != None) and not parent2
         self.gender = rbool()
@@ -94,14 +103,15 @@ class Person:
         self.oppinion = {}
         Country.id += 1
         self.id = Country.id
-
+        self.country = country
+        self.country.people.append(self)
         if self.gender:
             self.name = Country.get_name("Male")
         else:
             self.name = Country.get_name("Female")
         if hasParents:
             self.eq = avg(parent1.eq,parent2.eq)
-            self.attra = avg(parent1.attra,parent2.polal)
+            self.attra = avg(parent1.attra,parent2.attra)
             self.polal = avg(parent1.polal,parent2.polal)
             self.sur = choice([parent1.sur,parent2.sur])
         else:
@@ -117,34 +127,70 @@ class Person:
         if not self.pay(country,self.money * country.vat):
             self.bank = country.get_bank()
         if random() < 1/(len(self.companies) + 0.1) and self.money > 100:
-            print("Company time",self.name,self.sur, self.money)
+            #print("Company time",self.name,self.sur, self.money)
             comp = Company(self)
             self.companies.append(comp)
             self.pay(comp,100)
         for x in range(50):
+
             person = choice(country.people)
             if person != self:
-                print(person.id)
-                if person in self.attraction:
-                    if person in self.attraction:
-                        self.attraction[person.id] +=  self.compatability(person)
-                    else:
-                        self.attraction[person.id] = self.compatability(person)
-                    if self.attraction[person.id] > 1:
-                        if self.spouse == None:
-                            self.spouse = person
-                            print("marriage",self.name,"+",person.name)
+                if person.id in self.attraction:
+                    self.attraction[person.id] +=  self.compatability(person)
+                    person.attraction[self.id] += person.compatability(self)
+                else:
+                    self.attraction[person.id] = self.compatability(person)
+                    person.attraction[self.id] = person.compatability(self)
+                if self.spouse:
+                    if self.attraction[self.spouse.id] * 10 < self.attraction[person.id]:
+                        self.cheat(person)
+                        print("cheating",self,person)
+                else:
+                    if self.attraction[person.id] > 5:
+                        if self.spouse == None and person.spouse == None:
+                            self.marry(person)
+                            #print("marriage",self.name,"+",person.name)
 
 
         if self.age > self.lifeexp:
             self.die(country)
     def compatability(self,other):
-        comp = 1
+        comp = 0.5
         if self.sur == other.sur:
             comp -= 0.1
         comp -= (1-(max(self.eq,other.eq)/min(self.eq,other.eq)))
         comp -= (1-(max(self.eq,other.eq)/min(self.eq,other.eq)))
+        comp -= abs(self.polal-other.polal) / 1000
         return comp
+    def marry(self,other):
+        if random() > 0.75:
+            other.spouse = self
+            self.spouse = other
+            if self.id == 5:
+                print("Marriage happened: " + self.name + " " + self.sur, other.name + " " + other.sur + " love: " + str(self.attraction[other.id]))
+    def divorce(self):
+        if self.spouse:
+            self.spouse.spouse = None
+        self.spouse = None
+
+    def cheat(self,other):
+
+        if self.spouse:
+            if random() > self.spouse.mstate/105:
+                self.spouse.murder(other)
+                if random() > 0.9:
+                    self.divorce()
+        elif random() > 0.80:
+            self.divorce()
+            self.marry(other)
+    def have_child(self,other):
+        if random() > 0.85:
+            pass
+    def murder(self,other):
+        print(str(self) + " murdered " + str(other))
+        other.pay(self,other.money)
+        other.die(other.country)
+        self.mstate *= random()
     def pay(self,other,amount):
         if self.bank:
             self.bank.do_transaction(self,other,amount)
@@ -154,7 +200,10 @@ class Person:
         if len(self.children) == 0:
             country.money += self.money
             self.money = 0
+        self.divorce()
         country.people.remove(self)
+    def __str__(self):
+        return self.name + " " + self.sur
 class Bank(Company):
     cut = 0.001
     intb = 0.01
