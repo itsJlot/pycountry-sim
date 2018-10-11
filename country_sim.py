@@ -43,6 +43,7 @@ class Company():
     def __init__(self, owner):
         self.sector = choice(Country.sectors)
         self.name = owner.sur
+        print(self.sector)
 
     def pay(self, other, amount):
         self.money -= amount
@@ -71,8 +72,10 @@ class Country(Company):
     def __init__(self, hcount=1000, money=1000000, vat=0.02):
         self.money = money
         self.companies.append(self)
+        self.companies.append(Company(self))
         self.vat = vat
         self.banks = [Bank()]
+        self.market = Market(self)
         for x in range(hcount):
             p = Person(country=self)
             self.pay(p, 500)
@@ -90,7 +93,7 @@ class Country(Company):
         if len(self.people) > 0:
             self.people[0].year(self)
             for person in self.people[1:]:
-                print(len(self.people))
+                #print(len(self.people))
                 person.year(self)
 
     def get_bank(self):
@@ -111,7 +114,11 @@ class Country(Company):
             self.pay(child, 400)
         else:
             self.pay(child, 10)
-
+class Market():
+    def __init__(self,country):
+        self.country = country
+    def __getitem__(self, item):
+        return self.country.companies.filter(lambda b: b.sector == item)
 
 class Person:
     parent1 = None
