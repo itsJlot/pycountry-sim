@@ -42,25 +42,45 @@ class Company():
 
     def __init__(self, owner):
         self.sector = choice(Country.sectors)
-        self.name = owner.sur
-        print(self.sector)
+        self.product = 0
+        self.base_materials = 0
+        self.money = 0
+        self.workers = []
+        self.owner = owner
+        self.quality = 1
+        if type(owner) == Country:
+            print(self.sector)
+            self.name = "State owned company: " + self.sector[0] + " Sector"
+        else:
+            self.name = owner.sur
+        print("Company started: " + self.name)
 
     def pay(self, other, amount):
         self.money -= amount
         other.money += amount
-
+    def produce(self):
+        """Allows the company to produce their product, the number of workers they have times, but is limited by the available base material"""
+        self.product += min(len(self.workers),self.base_materials)
     def year(self, country):
+        if type(self) != Country:
+            self.pay(self.owner, self.money * 0.05)
         self.pay(country, self.money * country.vat)
+        for worker in self.workers:
+            self.pay(worker,100 * worker.age)
+        if self.sector[1] and self.base_materials < len(self.workers):
+            country.market.open_buy_offer(Offer(self.sector[0],self.base_materials,self.sector[3] * self.quality,self))
+        if self.sector[0] and self.product > 0:
+            country.market.open_sell_offer(Offer(self.sector[0],self.product,country.market.request_market_price(self.sector[0]),self))
+        self.quality += 0.01
 
-
-class Sector():
-    name = "Steel"
+    def __str__(self):
+        return self.name + "," + self.sector[0] + " (Owned by: " + self.owner + " budget: " + self.money
 
 
 class Country(Company):
     # Sector syntax: (Sector name, base mat, ratio of buyers (0 consumer, 1 companies), price of 1 unit)
-    sectors = [("Raw", None, 0.98, 50), ("Industry", "Raw", 0.7, 2000), ("Tech", "Industry", 0.4, 3000),
-               ("Food", "Raw", 0.1, 100)]
+    sectors = [("Raw", None, 0, 50), ("Industry", "Raw", 20, 2000), ("Tech", "Industry", 20, 3000),
+               ("Food", "Raw", 10, 100)]
     companies = []
     people = []
     workers = []
@@ -70,12 +90,14 @@ class Country(Company):
 
     # vat: tax rate
     def __init__(self, hcount=1000, money=1000000, vat=0.02):
+        Company.__init__(self,self)
         self.money = money
         self.companies.append(self)
         self.companies.append(Company(self))
         self.vat = vat
         self.banks = [Bank()]
         self.market = Market(self)
+        self.sector = ("Raw", None, 0.98, 50)
         for x in range(hcount):
             p = Person(country=self)
             self.pay(p, 500)
@@ -92,9 +114,12 @@ class Country(Company):
         # print(self.people[0].name, self.people[0].attraction)
         if len(self.people) > 0:
             self.people[0].year(self)
+            for company in self.companies:
+                company.year(self)
             for person in self.people[1:]:
                 #print(len(self.people))
                 person.year(self)
+
 
     def get_bank(self):
         return choice(self.banks)
@@ -114,12 +139,47 @@ class Country(Company):
             self.pay(child, 400)
         else:
             self.pay(child, 10)
+class Offer():
+    def __init__(self, material, count, price, company):
+        self.material = material
+        self.count = count
+        self.price = price
+        self.company = company
+    def as_market_offer(self):
+        return (self.material, self.count, self.price, self)
 class Market():
     def __init__(self,country):
         self.country = country
-    def __getitem__(self, item):
-        return self.country.companies.filter(lambda b: b.sector == item)
-
+        self.sell_offers = []
+        self.buy_offers = []
+    #Offer format: (requested material, count, min_price, self)
+    def open_sell_offer(self,offer):
+        self.sell_offers.append(offer)
+    #Offer format: (sold material, count, price, self)
+    def open_buy_offer(self,offer):
+        self.buy_offers.append(offer)
+    def request_market_price(self,product):
+        offers = self.get_sell_offers(product,1000000,0)
+        if len(offers) > 0:
+            price_list = [x[3] for x in self.get_sell_offers(product,1000000,0)]
+            average = sum(price_list)/len(price_list)
+            return average
+        return filter(lambda x: x[0] == product,self.country.sectors)[0]
+    def get_buy_offers(self,mat_name,price,max_count):
+        return list(filter(lambda x: x[0]==mat_name and x[2] <= price and x[1] <= max_count,self.buy_offers))
+    def get_sell_offers(self,mat_name,price,max_count):
+        return list(filter(lambda x: x[0]==mat_name and x[2] >= price and x[1] >= max_count,self.sell_offers))
+    def serve(self):
+        for request in self.sell_offers:
+            request = request.as_market_offer()
+            offers = self.get_buy_offers(request[0],request[2],request[1])
+            if len(offers) > 0:
+                offer = offers[0]
+                offer[3].pay(request[3],offer[2] * offer[1])
+                offer[3].ressources += offer[1]
+                request[3].ressources -= offer[1]
+                self.buy_offers.remove(offer)
+                print(request[3],"sold",offer[1],"ressources to",offer[3])
 class Person:
     parent1 = None
     parent2 = None
@@ -174,11 +234,13 @@ class Person:
         if self.age > 18:
             if not self.pay(country, self.money * country.vat):
                 self.bank = country.get_bank()
-            if random() < 1 / (len(self.companies) + 0.1) and self.money > 100:
+            if random()/3 < 1 / (len(self.companies) + 1.2) and self.money > 100:
                 # print("Company time",self.name,self.sur, self.money)
+                print(1 / (len(self.companies) + 0.1), "company starting chance with",len(self.companies),"companies")
                 comp = Company(self)
                 self.companies.append(comp)
                 self.pay(comp, 100)
+
             for child in self.children:
                 self.pay(child, self.money * 0.04)
                 country.request_child_support(child)
