@@ -22,7 +22,7 @@ namelist = {
     "Sur": ["Van Rossem", "Teel", "Garner", "Katranjiev", "Biondo", "Madsen", "Popov", "Yamashita", "Bryan", "Wolf",
             "Santana", "Zino", "Horn", "Lewerenz", "Armbruster", "Herriot", "Gardyner", "Ikin", "Mayes", "Campo",
             "Oliver", "Bergström"],
-    }
+}
 
 
 def rbool():
@@ -42,6 +42,7 @@ class Company():
 
     def __init__(self, owner):
         self.sector = choice(Country.sectors)
+        #print(self.sector)
         self.product = 0
         self.base_materials = 0
         self.money = 0
@@ -53,26 +54,31 @@ class Company():
             self.name = "State owned company: " + self.sector[0] + " Sector"
         else:
             self.name = owner.sur
-        print("Company started: " + self.name)
+        #print("Company started: " + self.name)
 
     def pay(self, other, amount):
         self.money -= amount
         other.money += amount
+
     def produce(self):
         """Allows the company to produce their product, the number of workers they have times, but is limited by the available base material"""
-        self.product += min(len(self.workers),self.base_materials)
+        self.product += min(len(self.workers), self.base_materials)
+        print(self.base_materials,self.product)
+
     def year(self, country):
         if type(self) != Country:
             self.pay(self.owner, self.money * 0.05)
         self.pay(country, self.money * country.vat)
         for worker in self.workers:
-            self.pay(worker,100 * worker.age)
+            self.pay(worker, 100 * worker.age/100)
         if self.sector[1] and self.base_materials < len(self.workers):
-            country.market.open_buy_offer(Offer(self.sector[0],self.base_materials,self.sector[3] * self.quality,self))
+            country.market.open_buy_offer(
+                Offer(self.sector[1], self.base_materials, self.sector[3] * self.quality, self))
         if self.sector[0] and self.product > 0:
-            country.market.open_sell_offer(Offer(self.sector[0],self.product,country.market.request_market_price(self.sector[0]),self))
+            country.market.open_sell_offer(
+                Offer(self.sector[0], self.product, country.market.request_market_price(self.sector[0]), self))
         self.quality += 0.01
-
+        self.produce()
     def __str__(self):
         return self.name + "," + self.sector[0] + " (Owned by: " + self.owner + " budget: " + self.money
 
@@ -90,7 +96,7 @@ class Country(Company):
 
     # vat: tax rate
     def __init__(self, hcount=1000, money=1000000, vat=0.02):
-        Company.__init__(self,self)
+        Company.__init__(self, self)
         self.money = money
         self.companies.append(self)
         self.companies.append(Company(self))
@@ -105,7 +111,6 @@ class Country(Company):
         while len(self.people) != 0:
             year += 1
             self.cyear()
-            #print("Year: " + str(year))
 
     def cyear(self):
         for company in self.companies[1:]:
@@ -117,10 +122,9 @@ class Country(Company):
             for company in self.companies:
                 company.year(self)
             for person in self.people[1:]:
-                #print(len(self.people))
+                # print(len(self.people))
                 person.year(self)
-
-
+        self.market.serve()
     def get_bank(self):
         return choice(self.banks)
 
@@ -139,47 +143,64 @@ class Country(Company):
             self.pay(child, 400)
         else:
             self.pay(child, 10)
+
+
 class Offer():
     def __init__(self, material, count, price, company):
         self.material = material
         self.count = count
         self.price = price
         self.company = company
+
     def as_market_offer(self):
         return (self.material, self.count, self.price, self)
+
+
 class Market():
-    def __init__(self,country):
+    def __init__(self, country):
         self.country = country
         self.sell_offers = []
         self.buy_offers = []
-    #Offer format: (requested material, count, min_price, self)
-    def open_sell_offer(self,offer):
+
+    # Offer format: (requested material, count, min_price, self)
+    def open_sell_offer(self, offer):
+        print("Sell offer opened",offer[3])
         self.sell_offers.append(offer)
-    #Offer format: (sold material, count, price, self)
-    def open_buy_offer(self,offer):
+
+    # Offer format: (sold material, count, price, self)
+    def open_buy_offer(self, offer):
+        #print("Buy offer opened", offer.as_market_offer()[3])
         self.buy_offers.append(offer)
-    def request_market_price(self,product):
-        offers = self.get_sell_offers(product,1000000,0)
+
+    def request_market_price(self, product):
+        offers = self.get_sell_offers(product, 1000000, 0)
         if len(offers) > 0:
-            price_list = [x[3] for x in self.get_sell_offers(product,1000000,0)]
-            average = sum(price_list)/len(price_list)
+            price_list = [x[3] for x in self.get_sell_offers(product, 1000000, 0)]
+            average = sum(price_list) / len(price_list)
             return average
-        return filter(lambda x: x[0] == product,self.country.sectors)[0]
-    def get_buy_offers(self,mat_name,price,max_count):
-        return list(filter(lambda x: x[0]==mat_name and x[2] <= price and x[1] <= max_count,self.buy_offers))
-    def get_sell_offers(self,mat_name,price,max_count):
-        return list(filter(lambda x: x[0]==mat_name and x[2] >= price and x[1] >= max_count,self.sell_offers))
+        return filter(lambda x: x[0] == product, self.country.sectors)[0]
+
+    def get_buy_offers(self, mat_name, price, max_count):
+        return list(filter(lambda x: x[0] == mat_name and x[2] <= price and x[1] <= max_count, self.buy_offers))
+
+    def get_sell_offers(self, mat_name, price, max_count):
+        return list(filter(lambda x: x[0] == mat_name and x[2] >= price and x[1] >= max_count, self.sell_offers))
+
     def serve(self):
+        print(self.sell_offers)
         for request in self.sell_offers:
             request = request.as_market_offer()
-            offers = self.get_buy_offers(request[0],request[2],request[1])
+            offers = self.get_buy_offers(request[0], request[2], request[1])
             if len(offers) > 0:
                 offer = offers[0]
-                offer[3].pay(request[3],offer[2] * offer[1])
+                offer[3].pay(request[3], offer[2] * offer[1])
                 offer[3].ressources += offer[1]
                 request[3].ressources -= offer[1]
                 self.buy_offers.remove(offer)
-                print(request[3],"sold",offer[1],"ressources to",offer[3])
+                print(request[3], "sold", offer[1], "ressources to", offer[3])
+        self.sell_offers = []
+        self.buy_offers = []
+
 class Person:
     parent1 = None
     parent2 = None
@@ -197,6 +218,7 @@ class Person:
         self.lifeexp = gauss(lifeexp, 20)
         hasParents = parent1 and parent2
         self.gender = rbool()
+        self.food = 0
         self.children = []
         self.companies = []
         self.attraction = {}
@@ -211,11 +233,11 @@ class Person:
         else:
             self.name = Country.get_name("Female")
         if hasParents:
-            self.eq = avg(parent1.eq, parent2.eq,0.1)
-            self.attra = avg(parent1.attra, parent2.attra,0.1)
-            self.polal = avg(parent1.polal, parent2.polal,0.1)
+            self.eq = avg(parent1.eq, parent2.eq, 0.1)
+            self.attra = avg(parent1.attra, parent2.attra, 0.1)
+            self.polal = avg(parent1.polal, parent2.polal, 0.1)
             self.sur = choice([parent1.sur, parent2.sur])
-            print("Child born: ", self)
+            #print("Child born: ", self)
         else:
             self.eq = gauss(100, 20)
             self.iq = gauss(100, 20)
@@ -223,20 +245,25 @@ class Person:
             self.polal = randint(0, 1000)
             self.sur = Country.get_name("Sur")
 
-
-
     def year(self, country):
         self.age += 1
         if self.hunger > 1000:
             if random() > 0.8:
                 self.die(self.country)
-        self.hunger += randint(50,100)
+                print(self,"starved")
+        self.hunger += randint(50, 100)
+        if self.hunger > 500:
+            if self.food > 0:
+                self.hunger -= randint(250,500)
+                self.food -= 1
+            else:
+                self.country.market.open_buy_offer(Offer("Food",4,100,self))
         if self.age > 18:
             if not self.pay(country, self.money * country.vat):
                 self.bank = country.get_bank()
-            if random()/3 < 1 / (len(self.companies) + 1.2) and self.money > 100:
+            if random() / 3 < 1 / (len(self.companies) + 1.2) and self.money > 100:
                 # print("Company time",self.name,self.sur, self.money)
-                print(1 / (len(self.companies) + 0.1), "company starting chance with",len(self.companies),"companies")
+                #print(1 / (len(self.companies) + 0.1), "company starting chance with", len(self.companies), "companies")
                 comp = Company(self)
                 self.companies.append(comp)
                 self.pay(comp, 100)
@@ -244,6 +271,8 @@ class Person:
             for child in self.children:
                 self.pay(child, self.money * 0.04)
                 country.request_child_support(child)
+            if len(country.people) == 0:
+                return None
             for x in range(50):
                 person = choice(country.people)
                 if person != self:
@@ -265,14 +294,16 @@ class Person:
                 self.couple()
             if self.age > self.lifeexp:
                 self.die(country)
+
     def couple(self):
         if random() > 0.8:
 
             child_had, child = self.have_child(self.spouse)
             if child_had:
-                print(self, "Had a child: ",child)
+                pass#print(self, "Had a child: ", child)
         if random() > 0.95:
             self.attraction[self.spouse.id] -= random() * 2
+
     def compatability(self, other):
         comp = 0.5
         if self.sur == other.sur:
@@ -292,13 +323,13 @@ class Person:
 
     def divorce(self):
         if self.spouse:
-            #print(self, "divorced", self.spouse)
+            # print(self, "divorced", self.spouse)
             self.spouse.spouse = None
         self.spouse = None
 
     def cheat(self, other):
         if self.spouse:
-            #print(self, "is cheating on", self.spouse)
+            # print(self, "is cheating on", self.spouse)
             if random() > 0.7:
                 child_had, child = self.have_child(other)
 
@@ -311,7 +342,6 @@ class Person:
                             print(self.spouse, "Went on a killing spree and then killed themselve")
                             self.spouse.murder(self.spouse)
                             self.die(self.country)
-
 
                         else:
                             other.murder(self.spouse)
